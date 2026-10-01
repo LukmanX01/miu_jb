@@ -1,0 +1,342 @@
+-- xyro | Jailbreak Script
+-- Called from Loader.lua
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+local State = {
+    AutoRob = false,
+    AutoFarm = false,
+    ESP = false,
+    SpeedHack = false,
+    Fly = false,
+    AutoArrest = false,
+    AntiRagdoll = false,
+    MenuOpen = false,
+}
+
+local FlySpeed = 60
+local SpeedValue = 80
+local FlyBV, FlyBG = nil, nil
+
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "xyroESP"
+ESPFolder.Parent = game.CoreGui
+
+-- ========================
+-- UTILS
+-- ========================
+
+local function Notify(msg)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "⚡ xyro Loader";
+        Text = msg;
+        Duration = 3;
+    })
+end
+
+local function RefreshChar()
+    Character = LocalPlayer.Character
+    if Character then
+        Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        RootPart = Character:FindFirstChild("HumanoidRootPart")
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(c)
+    Character = c
+    Humanoid = c:WaitForChild("Humanoid")
+    RootPart = c:WaitForChild("HumanoidRootPart")
+end)
+
+-- ========================
+-- ANTI RAGDOLL
+-- ========================
+
+local function AntiRagdoll()
+    if not Character then return end
+    for _, v in pairs(Character:GetDescendants()) do
+        if v:IsA("BallSocketConstraint") or v:IsA("HingeConstraint") then
+            v.Enabled = false
+        end
+    end
+end
+
+-- ========================
+-- SPEED
+-- ========================
+
+local function SetSpeed(on)
+    RefreshChar()
+    if Humanoid then
+        Humanoid.WalkSpeed = on and SpeedValue or 16
+    end
+end
+
+-- ========================
+-- FLY
+-- ========================
+
+local function StartFly()
+    RefreshChar()
+    if not RootPart then return end
+
+    FlyBV = Instance.new("BodyVelocity")
+    FlyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+    FlyBV.Velocity = Vector3.zero
+    FlyBV.Parent = RootPart
+
+    FlyBG = Instance.new("BodyGyro")
+    FlyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+    FlyBG.D = 100
+    FlyBG.Parent = RootPart
+
+    RunService.Heartbeat:Connect(function()
+        if not State.Fly then
+            if FlyBV then FlyBV:Destroy() FlyBV = nil end
+            if FlyBG then FlyBG:Destroy() FlyBG = nil end
+            return
+        end
+        local cam = workspace.CurrentCamera
+        if FlyBV then FlyBV.Velocity = cam.CFrame.LookVector * FlySpeed end
+        if FlyBG then FlyBG.CFrame = cam.CFrame end
+    end)
+end
+
+local function StopFly()
+    State.Fly = false
+    if FlyBV then FlyBV:Destroy() FlyBV = nil end
+    if FlyBG then FlyBG:Destroy() FlyBG = nil end
+    RefreshChar()
+    if Humanoid then Humanoid.PlatformStand = false end
+end
+
+-- ========================
+-- ESP
+-- ========================
+
+local function ClearESP() for _, v in pairs(ESPFolder:GetChildren()) do v:Destroy() end end
+
+local function CreateESP()
+    ClearESP()
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local bb = Instance.new("BillboardGui")
+            bb.AlwaysOnTop = true
+            bb.Size = UDim2.new(0,100,0,40)
+            bb.Name = p.Name.."_esp"
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.fromScale(1,1)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(255,70,70)
+            lbl.TextStrokeTransparency = 0
+            lbl.TextScaled = true
+            lbl.Font = Enum.Font.GothamBold
+            lbl.Text = p.Name
+            lbl.Parent = bb
+
+            local function Attach()
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    bb.Adornee = p.Character.HumanoidRootPart
+                    bb.Parent = ESPFolder
+                end
+            end
+            Attach()
+            p.CharacterAdded:Connect(Attach)
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function() if State.ESP then CreateESP() end end)
+Players.PlayerRemoving:Connect(function(p)
+    local t = ESPFolder:FindFirstChild(p.Name.."_esp")
+    if t then t:Destroy() end
+end)
+
+-- ========================
+-- AUTO ROB
+-- ========================
+
+local RobTargets = {"Bank","JewelryStore","DonutShop","MuseumInterior","CargoShip"}
+
+local function AutoRobLoop()
+    while State.AutoRob do
+        for _, name in pairs(RobTargets) do
+            if not State.AutoRob then break end
+            local t = workspace:FindFirstChild(name, true)
+            if t then
+                local part = t:FindFirstChildWhichIsA("BasePart")
+                if part and RootPart then
+                    local tw = TweenService:Create(RootPart, TweenInfo.new(2), {
+                        CFrame = part.CFrame + Vector3.new(0,3,0)
+                    })
+                    tw:Play()
+                    tw.Completed:Wait()
+                end
+            end
+            task.wait(5)
+        end
+        task.wait(1)
+    end
+end
+
+-- ========================
+-- AUTO FARM
+-- ========================
+
+local function AutoFarmLoop()
+    while State.AutoFarm do
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if not State.AutoFarm then break end
+            if obj:IsA("BasePart") and (
+                obj.Name:lower():find("cash") or
+                obj.Name:lower():find("money") or
+                obj.Name:lower():find("atm") or
+                obj.Name:lower():find("register")
+            ) then
+                if RootPart then
+                    RootPart.CFrame = obj.CFrame + Vector3.new(0,3,0)
+                    task.wait(0.5)
+                end
+            end
+        end
+        task.wait(2)
+    end
+end
+
+-- ========================
+-- AUTO ARREST
+-- ========================
+
+local function AutoArrestLoop()
+    while State.AutoArrest do
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                local c = p.Character
+                if c then
+                    local r = c:FindFirstChild("HumanoidRootPart")
+                    if r and RootPart then
+                        if (RootPart.Position - r.Position).Magnitude < 15 then
+                            RootPart.CFrame = r.CFrame + Vector3.new(0,0,-2)
+                            task.wait(0.3)
+                        end
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end
+
+-- ========================
+-- GUI
+-- ========================
+
+local SG = Instance.new("ScreenGui")
+SG.Name = "xyroJB"
+SG.ResetOnSpawn = false
+SG.Parent = game.CoreGui
+
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Size = UDim2.new(0,60,0,60)
+ToggleBtn.Position = UDim2.new(0,10,0.4,0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(20,20,30)
+ToggleBtn.Image = "rbxassetid://7059346373"
+ToggleBtn.ImageColor3 = Color3.fromRGB(255,100,0)
+ToggleBtn.ScaleType = Enum.ScaleType.Fit
+ToggleBtn.Parent = SG
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1,0)
+
+local Panel = Instance.new("Frame")
+Panel.Size = UDim2.new(0,280,0,420)
+Panel.Position = UDim2.new(0,80,0.1,0)
+Panel.BackgroundColor3 = Color3.fromRGB(15,15,25)
+Panel.BorderSizePixel = 0
+Panel.Visible = false
+Panel.Parent = SG
+Instance.new("UICorner", Panel).CornerRadius = UDim.new(0,12)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,0,0,40)
+Title.BackgroundColor3 = Color3.fromRGB(255,100,0)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "⚡ xyro | Jailbreak"
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.TextSize = 16
+Title.Parent = Panel
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0,12)
+
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1,-10,1,-50)
+Scroll.Position = UDim2.new(0,5,0,45)
+Scroll.BackgroundTransparency = 1
+Scroll.ScrollBarThickness = 3
+Scroll.CanvasSize = UDim2.new(0,0,0,0)
+Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Scroll.Parent = Panel
+
+local UL = Instance.new("UIListLayout")
+UL.Padding = UDim.new(0,6)
+UL.Parent = Scroll
+
+local UP = Instance.new("UIPadding")
+UP.PaddingLeft = UDim.new(0,6)
+UP.PaddingTop = UDim.new(0,4)
+UP.Parent = Scroll
+
+local function MakeToggle(label, icon, key, onOn, onOff)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1,-12,0,44)
+    Btn.BackgroundColor3 = Color3.fromRGB(28,28,42)
+    Btn.Font = Enum.Font.GothamSemibold
+    Btn.Text = icon.."  "..label.."  [ OFF ]"
+    Btn.TextColor3 = Color3.fromRGB(200,200,200)
+    Btn.TextSize = 13
+    Btn.Parent = Scroll
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0,8)
+
+    local active = false
+    Btn.MouseButton1Click:Connect(function()
+        active = not active
+        State[key] = active
+        if active then
+            Btn.BackgroundColor3 = Color3.fromRGB(255,100,0)
+            Btn.TextColor3 = Color3.fromRGB(255,255,255)
+            Btn.Text = icon.."  "..label.."  [ ON ]"
+            if onOn then task.spawn(onOn) end
+        else
+            Btn.BackgroundColor3 = Color3.fromRGB(28,28,42)
+            Btn.TextColor3 = Color3.fromRGB(200,200,200)
+            Btn.Text = icon.."  "..label.."  [ OFF ]"
+            if onOff then onOff() end
+        end
+    end)
+end
+
+MakeToggle("Auto Rob","🏦","AutoRob", function() AutoRobLoop() end, function() State.AutoRob=false end)
+MakeToggle("Auto Farm Cash","💰","AutoFarm", function() AutoFarmLoop() end, function() State.AutoFarm=false end)
+MakeToggle("ESP Players","🔴","ESP", function() CreateESP() end, function() ClearESP() end)
+MakeToggle("Speed Hack","⚡","SpeedHack", function() SetSpeed(true) end, function() SetSpeed(false) end)
+MakeToggle("Fly","🛸","Fly", function() State.Fly=true StartFly() end, function() StopFly() end)
+MakeToggle("Auto Arrest","🚔","AutoArrest", function() AutoArrestLoop() end, function() State.AutoArrest=false end)
+MakeToggle("Anti Ragdoll","🛡️","AntiRagdoll", function() AntiRagdoll() end, function() end)
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    State.MenuOpen = not State.MenuOpen
+    Panel.Visible = State.MenuOpen
+    ToggleBtn.ImageColor3 = State.MenuOpen
+        and Color3.fromRGB(255,200,0)
+        or Color3.fromRGB(255,100,0)
+end)
+
+RunService.Heartbeat:Connect(function()
+    if State.AntiRagdoll then AntiRagdoll() end
+end)
+
+Notify("xyro loaded via Loader ⚡")
