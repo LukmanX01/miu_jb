@@ -1,0 +1,10 @@
+-- xyro Loader v1.0
+-- Host this file, call it via loadstring
+
+local repo = "https://raw.githubusercontent.com/miumiu/lukman/main/"
+
+local function Load(file)
+    return loadstring(game:HttpGet(repo .. file, true))()
+end
+
+Load("Main.lua")
